@@ -1,0 +1,56 @@
+{
+  "whitelist": {
+    "description": "会话白名单",
+    "type": "list",
+    "default": [],
+    "hint": "留空时全部会话可用；群聊填写群号，私聊填写用户 ID。配置后仅允许列表中的会话使用。"
+  },
+  "strict_mode": {
+    "description": "指令默认使用严格模式",
+    "type": "bool",
+    "default": false,
+    "hint": "关闭时 factor=1.2，开启时 factor=1.4。"
+  },
+  "enable_llm_tool": {
+    "description": "启用 LLM 搜本子工具",
+    "type": "bool",
+    "default": true,
+    "hint": "仅在模型支持 Function Calling 时生效；固定 /搜本子 指令不依赖此项。"
+  },
+  "timeout_seconds": {
+    "description": "总请求超时（秒）",
+    "type": "int",
+    "default": 300,
+    "hint": "允许范围 10-600 秒。"
+  },
+  "cooldown_seconds": {
+    "description": "单用户冷却（秒）",
+    "type": "int",
+    "default": 30,
+    "hint": "设为 0 可关闭冷却。"
+  },
+  "max_concurrency": {
+    "description": "最大并发搜索数",
+    "type": "int",
+    "default": 2,
+    "hint": "建议保持 1-2，避免触发网站限流。"
+  },
+  "max_pending_tasks": {
+    "description": "最大待处理任务数",
+    "type": "int",
+    "default": 20,
+    "hint": "超过上限的新请求会立即失败，不会无限排队。"
+  },
+  "top_k": {
+    "description": "网站检索候选数",
+    "type": "int",
+    "default": 25,
+    "hint": "允许范围 1-50。"
+  },
+  "max_results": {
+    "description": "聊天中展示的结果数",
+    "type": "int",
+    "default": 3,
+    "hint": "允许范围 1-10；完整结果始终附带网页链接。"
+  }
+}
