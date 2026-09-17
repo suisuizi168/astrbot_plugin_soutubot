@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import unittest
 
-from models import format_search_response, parse_search_response, safe_http_url
+from models import (
+    SearchItem,
+    SearchResponse,
+    format_search_response,
+    parse_search_response,
+    safe_http_url,
+    select_search_items,
+)
 
 
 class CurrentResponseTests(unittest.TestCase):
@@ -38,7 +45,35 @@ class CurrentResponseTests(unittest.TestCase):
         self.assertEqual(response.items[0].source_id, "123")
         text = format_search_response(response, max_results=3)
         self.assertIn("92.50%", text)
-        self.assertIn("https://soutubot.moe/results/202609170001", text)
+        self.assertNotIn("soutubot.moe", text)
+        self.assertIn("来源于搜图Bot酱", text)
+
+    def test_only_results_at_or_above_eighty_are_shown(self) -> None:
+        response = SearchResponse(
+            result_id="secret-id",
+            image_url=None,
+            items=(
+                SearchItem(80.0, "At threshold", "a", "A"),
+                SearchItem(79.99, "Below threshold", "b", "B"),
+            ),
+        )
+        selected, total = select_search_items(response)
+        self.assertEqual(total, 1)
+        self.assertEqual([item.title for item in selected], ["At threshold"])
+        text = format_search_response(response)
+        self.assertIn("At threshold", text)
+        self.assertNotIn("Below threshold", text)
+        self.assertNotIn("secret-id", text)
+
+    def test_no_high_similarity_result_has_explicit_message(self) -> None:
+        response = SearchResponse(
+            result_id="secret-id",
+            image_url=None,
+            items=(SearchItem(60.0, "Low", "a", "A"),),
+        )
+        text = format_search_response(response)
+        self.assertIn("没有找到相似度达到 80% 的结果", text)
+        self.assertNotIn("Low", text)
 
     def test_unsafe_urls_are_discarded(self) -> None:
         self.assertIsNone(safe_http_url("javascript:alert(1)"))

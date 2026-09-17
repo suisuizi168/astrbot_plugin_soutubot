@@ -9,6 +9,11 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star
 
+try:
+    from astrbot.core.utils.quoted_message import extract_quoted_message_images
+except ImportError:  # Compatibility with AstrBot versions before this helper existed.
+    extract_quoted_message_images = None
+
 from .client import (
     SearchParameters,
     SoutubotClient,
@@ -16,7 +21,15 @@ from .client import (
     SoutubotRateLimitError,
 )
 from .image_utils import ImagePreparationError, prepare_image_async
-from .models import format_search_response
+from .models import (
+    MIN_SIMILARITY,
+    SearchResponse,
+    format_match_header,
+    format_search_footer,
+    format_search_item,
+    format_search_response,
+    select_search_items,
+)
 from .policy import AccessPolicy, CooldownManager
 
 
@@ -71,16 +84,27 @@ class Main(Star):
         )
 
     @staticmethod
-    def _extract_image(event: AstrMessageEvent) -> Comp.Image | None:
+    async def _extract_image(event: AstrMessageEvent) -> Comp.Image | None:
         chain = list(event.get_messages() or [])
         for segment in chain:
             if isinstance(segment, Comp.Image):
                 return segment
+        reply = None
         for segment in chain:
             if isinstance(segment, Comp.Reply):
-                for quoted in list(segment.chain or []):
-                    if isinstance(quoted, Comp.Image):
-                        return quoted
+                reply = segment
+                break
+        if reply is not None and extract_quoted_message_images is not None:
+            try:
+                image_refs = await extract_quoted_message_images(event, reply)
+                if image_refs:
+                    return Comp.Image(file=image_refs[0])
+            except Exception as exc:
+                logger.warning("解析引用图片失败: %s", type(exc).__name__)
+        if reply is not None:
+            for quoted in list(reply.chain or []):
+                if isinstance(quoted, Comp.Image):
+                    return quoted
         return None
 
     @staticmethod
@@ -107,7 +131,7 @@ class Main(Star):
 
     async def _search_bytes(
         self, image_bytes: bytes, filename: str, *, strict: bool
-    ) -> str:
+    ) -> SearchResponse:
         prepared = await prepare_image_async(image_bytes, filename)
         params = SearchParameters(
             factor=1.4 if strict else 1.2,
@@ -115,12 +139,29 @@ class Main(Star):
             top_k=self._top_k,
         )
         async with self._semaphore:
-            response = await self._client.search(prepared, params)
-        return format_search_response(
+            return await self._client.search(prepared, params)
+
+    def _build_result_chain(self, response: SearchResponse) -> MessageChain:
+        selected, qualified_count = select_search_items(
             response,
+            min_similarity=MIN_SIMILARITY,
             max_results=self._max_results,
-            factor=params.factor,
         )
+        components: list[Any] = [
+            Comp.Plain(
+                format_match_header(
+                    qualified_count,
+                    len(selected),
+                    min_similarity=MIN_SIMILARITY,
+                )
+            )
+        ]
+        for index, item in enumerate(selected, start=1):
+            if item.thumbnail_url:
+                components.append(Comp.Image.fromURL(item.thumbnail_url))
+            components.append(Comp.Plain("\n" + format_search_item(item, index)))
+        components.append(Comp.Plain("\n\n" + format_search_footer(response)))
+        return MessageChain(components)
 
     @staticmethod
     def _user_error(exc: Exception) -> str:
@@ -132,8 +173,8 @@ class Main(Star):
             return str(exc)
         return "搜图失败，请稍后重试；管理员可查看插件日志了解原因。"
 
-    async def _send_text(self, umo: str, text: str) -> None:
-        await self.context.send_message(umo, MessageChain([Comp.Plain(text)]))
+    async def _send_chain(self, umo: str, chain: MessageChain) -> None:
+        await self.context.send_message(umo, chain)
 
     async def _background_search(
         self,
@@ -144,14 +185,15 @@ class Main(Star):
         strict: bool,
     ) -> None:
         try:
-            text = await self._search_bytes(image_bytes, filename, strict=strict)
+            response = await self._search_bytes(image_bytes, filename, strict=strict)
+            chain = self._build_result_chain(response)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # The user receives a sanitized error.
             logger.warning("搜本子后台任务失败: %s", type(exc).__name__)
-            text = self._user_error(exc)
+            chain = MessageChain([Comp.Plain(self._user_error(exc))])
         try:
-            await self._send_text(umo, text)
+            await self._send_chain(umo, chain)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -180,7 +222,7 @@ class Main(Star):
         if not allowed:
             yield event.plain_result(message)
             return
-        image = self._extract_image(event)
+        image = await self._extract_image(event)
         if image is None:
             await self._cooldown.release(self._cooldown_key(event))
             yield event.plain_result(
@@ -227,7 +269,7 @@ class Main(Star):
         allowed, message = await self._claim_request(event)
         if not allowed:
             return message
-        image = self._extract_image(event)
+        image = await self._extract_image(event)
         if image is None:
             await self._cooldown.release(self._cooldown_key(event))
             return "当前消息和引用消息中没有可用于搜本子的图片。"
@@ -235,10 +277,15 @@ class Main(Star):
             image_bytes, filename = await asyncio.wait_for(
                 self._materialize_image(image), timeout=60
             )
-            return await self._search_bytes(
+            response = await self._search_bytes(
                 image_bytes,
                 filename,
                 strict=bool(strict) or self._strict_default,
+            )
+            return format_search_response(
+                response,
+                max_results=self._max_results,
+                min_similarity=MIN_SIMILARITY,
             )
         except Exception as exc:
             return self._user_error(exc)

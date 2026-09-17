@@ -21,6 +21,8 @@ SOURCE_NAMES = {
     "manhuacat": "Manhuacat",
 }
 
+MIN_SIMILARITY = 80.0
+
 LEGACY_HOSTS = {
     "nhentai": "https://nhentai.net",
     "ehentai": "https://e-hentai.org",
@@ -223,40 +225,82 @@ def _shorten(text: str, limit: int = 120) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def select_search_items(
+    response: SearchResponse,
+    *,
+    min_similarity: float = MIN_SIMILARITY,
+    max_results: int = 3,
+) -> tuple[tuple[SearchItem, ...], int]:
+    qualified = sorted(
+        (item for item in response.items if item.score >= min_similarity),
+        key=lambda item: item.score,
+        reverse=True,
+    )
+    return tuple(qualified[: max(1, max_results)]), len(qualified)
+
+
+def format_match_header(
+    qualified_count: int,
+    shown_count: int,
+    *,
+    min_similarity: float = MIN_SIMILARITY,
+) -> str:
+    threshold = f"{min_similarity:g}%"
+    if not qualified_count:
+        return f"没有找到相似度达到 {threshold} 的结果。"
+    if shown_count < qualified_count:
+        return (
+            f"找到 {qualified_count} 条相似度达到 {threshold} 的结果，"
+            f"展示前 {shown_count} 条："
+        )
+    return f"找到 {qualified_count} 条相似度达到 {threshold} 的结果："
+
+
+def format_search_item(item: SearchItem, index: int) -> str:
+    source = item.source_name
+    if item.source_id:
+        source += f" #{item.source_id}"
+    page = f"，第 {item.page_number} 页" if item.page_number is not None else ""
+    lines = [
+        f"{index}. {_shorten(item.title)}",
+        f"相似度：{item.score:.2f}%｜来源：{source}{page}",
+    ]
+    if item.page_url:
+        lines.append(f"匹配页：{item.page_url}")
+    if item.source_url and item.source_url != item.page_url:
+        lines.append(f"详情页：{item.source_url}")
+    return "\n".join(lines)
+
+
+def format_search_footer(response: SearchResponse) -> str:
+    lines: list[str] = []
+    if response.partial:
+        lines.append("服务端返回了部分结果，可能仍有结果未展示。")
+    if response.elapsed_seconds is not None:
+        lines.append(f"耗时：{response.elapsed_seconds:.2f} 秒")
+    lines.append("来源于搜图Bot酱")
+    return "\n".join(lines)
+
+
 def format_search_response(
     response: SearchResponse,
     *,
     max_results: int = 3,
-    factor: float = 1.2,
+    min_similarity: float = MIN_SIMILARITY,
 ) -> str:
-    total = len(response.items)
-    if not total:
-        lines = ["没有找到相似结果。"]
-    else:
-        lines = [f"搜图完成：找到 {total} 条相似结果。"]
-        threshold = 35.0 if factor >= 1.4 else 45.0
-        if response.items[0].score < threshold:
-            lines.append("最高相似度较低，结果可能不准确。")
-        for index, item in enumerate(response.items[: max(1, max_results)], start=1):
-            source = item.source_name
-            if item.source_id:
-                source += f" #{item.source_id}"
-            page = f"，第 {item.page_number} 页" if item.page_number is not None else ""
-            lines.extend(
-                [
-                    "",
-                    f"{index}. {_shorten(item.title)}",
-                    f"相似度：{item.score:.2f}%｜来源：{source}{page}",
-                ]
-            )
-            if item.page_url:
-                lines.append(f"匹配页：{item.page_url}")
-            if item.source_url and item.source_url != item.page_url:
-                lines.append(f"详情页：{item.source_url}")
-    if response.partial:
-        lines.append("\n服务端返回了部分结果，可能仍有结果未展示。")
-    if response.elapsed_seconds is not None:
-        lines.append(f"\n耗时：{response.elapsed_seconds:.2f} 秒")
-    if response.result_page_url:
-        lines.append(f"完整结果：{response.result_page_url}")
+    selected, qualified_count = select_search_items(
+        response,
+        min_similarity=min_similarity,
+        max_results=max_results,
+    )
+    lines = [
+        format_match_header(
+            qualified_count,
+            len(selected),
+            min_similarity=min_similarity,
+        )
+    ]
+    for index, item in enumerate(selected, start=1):
+        lines.extend(["", format_search_item(item, index)])
+    lines.extend(["", format_search_footer(response)])
     return "\n".join(lines).strip()
