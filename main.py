@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
@@ -13,6 +14,11 @@ try:
     from astrbot.core.utils.quoted_message import extract_quoted_message_images
 except ImportError:  # Compatibility with AstrBot versions before this helper existed.
     extract_quoted_message_images = None
+
+try:
+    from astrbot.core.utils.media_utils import MediaResolver
+except ImportError:  # Compatibility with AstrBot versions before MediaResolver existed.
+    MediaResolver = None
 
 from .client import (
     SearchParameters,
@@ -27,7 +33,6 @@ from .models import (
     format_match_header,
     format_search_footer,
     format_search_item,
-    format_search_response,
     select_search_items,
 )
 from .policy import AccessPolicy, CooldownManager
@@ -108,18 +113,59 @@ class Main(Star):
         return None
 
     @staticmethod
+    def _filename_for_image(image: Comp.Image, ref: str = "") -> str:
+        explicit = getattr(image, "filename", None)
+        if explicit:
+            return str(explicit)
+        if ref:
+            parsed = urlparse(ref)
+            candidate = unquote(Path(parsed.path).name)
+            if candidate:
+                return candidate
+        return "image"
+
+    @staticmethod
     async def _materialize_image(image: Comp.Image) -> tuple[bytes, str]:
-        path = await image.convert_to_file_path()
-        if not path:
-            raise ImagePreparationError("无法取得图片文件")
-        image_path = Path(path)
-        data = await asyncio.to_thread(image_path.read_bytes)
-        filename = (
-            getattr(image, "filename", None)
-            or image_path.name
-            or "image"
+        """Copy an event image into memory before the LLM turn can clean temp files."""
+
+        refs: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for kind in ("path", "url", "file"):
+            value = getattr(image, kind, None)
+            if isinstance(value, str) and value and value not in seen:
+                refs.append((kind, value))
+                seen.add(value)
+
+        failures: list[str] = []
+        if MediaResolver is not None:
+            for kind, ref in refs:
+                try:
+                    data = await MediaResolver(ref, media_type="image").to_bytes()
+                    if data:
+                        return data, Main._filename_for_image(image, ref)
+                    failures.append(f"{kind}:EmptyImage")
+                except Exception as exc:
+                    failures.append(f"{kind}:{type(exc).__name__}")
+
+        # Keep compatibility with older AstrBot versions and unusual components.
+        try:
+            path = await image.convert_to_file_path()
+            if not path:
+                failures.append("component:EmptyPath")
+            else:
+                image_path = Path(path)
+                data = await asyncio.to_thread(image_path.read_bytes)
+                if data:
+                    return data, Main._filename_for_image(image, str(image_path))
+                failures.append("component:EmptyImage")
+        except Exception as exc:
+            failures.append(f"component:{type(exc).__name__}")
+
+        logger.warning(
+            "搜本子读取消息图片失败（未记录图片地址）: %s",
+            ", ".join(failures) or "NoImageReference",
         )
-        return data, str(filename)
+        raise ImagePreparationError("无法读取消息中的图片，请重新发送原图后再试")
 
     async def _claim_request(self, event: AstrMessageEvent) -> tuple[bool, str]:
         if not self._is_allowed(event):
@@ -190,7 +236,7 @@ class Main(Star):
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # The user receives a sanitized error.
-            logger.warning("搜本子后台任务失败: %s", type(exc).__name__)
+            logger.warning("搜本子后台搜索失败: %s", type(exc).__name__)
             chain = MessageChain([Comp.Plain(self._user_error(exc))])
         try:
             await self._send_chain(umo, chain)
@@ -198,6 +244,25 @@ class Main(Star):
             raise
         except Exception as exc:
             logger.error("搜本子结果发送失败: %s", type(exc).__name__)
+
+    def _start_background_search(
+        self,
+        *,
+        event: AstrMessageEvent,
+        image_bytes: bytes,
+        filename: str,
+        strict: bool,
+    ) -> None:
+        task = asyncio.create_task(
+            self._background_search(
+                umo=event.unified_msg_origin,
+                image_bytes=image_bytes,
+                filename=filename,
+                strict=strict,
+            ),
+            name="astrbot_plugin_soutubot.search",
+        )
+        self._track_task(task)
 
     def _track_task(self, task: asyncio.Task[None]) -> None:
         self._tasks.add(task)
@@ -238,20 +303,17 @@ class Main(Star):
                 self._materialize_image(image), timeout=60
             )
         except Exception as exc:
+            logger.warning("搜本子指令准备图片失败: %s", type(exc).__name__)
             await self._cooldown.release(self._cooldown_key(event))
             yield event.plain_result(self._user_error(exc))
             return
 
-        task = asyncio.create_task(
-            self._background_search(
-                umo=event.unified_msg_origin,
-                image_bytes=image_bytes,
-                filename=filename,
-                strict=self._strict_default,
-            ),
-            name="astrbot_plugin_soutubot.search",
+        self._start_background_search(
+            event=event,
+            image_bytes=image_bytes,
+            filename=filename,
+            strict=self._strict_default,
         )
-        self._track_task(task)
         yield event.plain_result("正在查询图片来源，完成后会在当前会话发送结果。")
 
     @filter.llm_tool(name="search_doujin_by_current_image")
@@ -273,22 +335,24 @@ class Main(Star):
         if image is None:
             await self._cooldown.release(self._cooldown_key(event))
             return "当前消息和引用消息中没有可用于搜本子的图片。"
+        if self._closing or len(self._tasks) >= self._max_pending_tasks:
+            await self._cooldown.release(self._cooldown_key(event))
+            return "当前待处理任务较多，请稍后再试。"
         try:
             image_bytes, filename = await asyncio.wait_for(
                 self._materialize_image(image), timeout=60
             )
-            response = await self._search_bytes(
-                image_bytes,
-                filename,
+            self._start_background_search(
+                event=event,
+                image_bytes=image_bytes,
+                filename=filename,
                 strict=bool(strict) or self._strict_default,
             )
-            return format_search_response(
-                response,
-                max_results=self._max_results,
-                min_similarity=MIN_SIMILARITY,
-            )
         except Exception as exc:
+            logger.warning("搜本子 LLM 工具准备图片失败: %s", type(exc).__name__)
+            await self._cooldown.release(self._cooldown_key(event))
             return self._user_error(exc)
+        return "已开始查询图片来源；结果会直接发送到当前会话，请勿重复调用工具。"
 
     async def terminate(self) -> None:
         self._closing = True
