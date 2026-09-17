@@ -164,11 +164,47 @@ class MainContractTests(unittest.IsolatedAsyncioTestCase):
         original = main_module.MediaResolver
         main_module.MediaResolver = Resolver
         try:
-            data, filename = await Main._materialize_image(image)
+            data, filename = await Main._materialize_image(Event([]), image)
         finally:
             main_module.MediaResolver = original
         self.assertEqual(data, b"valid-image-bytes")
         self.assertEqual(filename, "current.jpg")
+
+    async def test_materialize_image_recovers_onebot_local_reference(self) -> None:
+        class Resolver:
+            def __init__(self, ref, **kwargs) -> None:
+                self.ref = ref
+
+            async def to_bytes(self):
+                if self.ref == "C:/napcat/cache/missing.jpg":
+                    raise FileNotFoundError
+                if self.ref == "https://multimedia.example/recovered.jpg":
+                    return b"recovered-image-bytes"
+                raise AssertionError(f"unexpected ref: {self.ref}")
+
+        class OneBotResolver:
+            def __init__(self, event) -> None:
+                self.event = event
+
+            async def resolve_for_llm(self, refs):
+                self.refs = refs
+                return ["https://multimedia.example/recovered.jpg"]
+
+        image = Image(
+            file="C:/napcat/cache/missing.jpg",
+            path="C:/napcat/cache/missing.jpg",
+        )
+        original_media = main_module.MediaResolver
+        original_onebot = main_module.AstrBotImageResolver
+        main_module.MediaResolver = Resolver
+        main_module.AstrBotImageResolver = OneBotResolver
+        try:
+            data, filename = await Main._materialize_image(Event([]), image)
+        finally:
+            main_module.MediaResolver = original_media
+            main_module.AstrBotImageResolver = original_onebot
+        self.assertEqual(data, b"recovered-image-bytes")
+        self.assertEqual(filename, "recovered.jpg")
 
     async def test_llm_tool_queues_background_search(self) -> None:
         plugin = object.__new__(Main)

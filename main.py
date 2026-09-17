@@ -16,6 +16,13 @@ except ImportError:  # Compatibility with AstrBot versions before this helper ex
     extract_quoted_message_images = None
 
 try:
+    from astrbot.core.utils.quoted_message.image_resolver import (
+        ImageResolver as AstrBotImageResolver,
+    )
+except ImportError:  # Compatibility with AstrBot versions before this resolver existed.
+    AstrBotImageResolver = None
+
+try:
     from astrbot.core.utils.media_utils import MediaResolver
 except ImportError:  # Compatibility with AstrBot versions before MediaResolver existed.
     MediaResolver = None
@@ -125,7 +132,9 @@ class Main(Star):
         return "image"
 
     @staticmethod
-    async def _materialize_image(image: Comp.Image) -> tuple[bytes, str]:
+    async def _materialize_image(
+        event: AstrMessageEvent, image: Comp.Image
+    ) -> tuple[bytes, str]:
         """Copy an event image into memory before the LLM turn can clean temp files."""
 
         refs: list[tuple[str, str]] = []
@@ -160,6 +169,28 @@ class Main(Star):
                 failures.append("component:EmptyImage")
         except Exception as exc:
             failures.append(f"component:{type(exc).__name__}")
+
+        # Some OneBot implementations expose an image as a local path that only
+        # exists in the adapter process. Ask AstrBot's OneBot-aware resolver to
+        # turn that opaque/stale reference back into a downloadable URL or file.
+        if AstrBotImageResolver is not None and refs and MediaResolver is not None:
+            try:
+                recovered_refs = await AstrBotImageResolver(event).resolve_for_llm(
+                    [ref for _, ref in refs]
+                )
+                for ref in recovered_refs:
+                    if ref in seen:
+                        continue
+                    seen.add(ref)
+                    try:
+                        data = await MediaResolver(ref, media_type="image").to_bytes()
+                        if data:
+                            return data, Main._filename_for_image(image, ref)
+                        failures.append("onebot:EmptyImage")
+                    except Exception as exc:
+                        failures.append(f"onebot:{type(exc).__name__}")
+            except Exception as exc:
+                failures.append(f"onebot_resolver:{type(exc).__name__}")
 
         logger.warning(
             "搜本子读取消息图片失败（未记录图片地址）: %s",
@@ -300,7 +331,7 @@ class Main(Star):
             return
         try:
             image_bytes, filename = await asyncio.wait_for(
-                self._materialize_image(image), timeout=60
+                self._materialize_image(event, image), timeout=60
             )
         except Exception as exc:
             logger.warning("搜本子指令准备图片失败: %s", type(exc).__name__)
@@ -340,7 +371,7 @@ class Main(Star):
             return "当前待处理任务较多，请稍后再试。"
         try:
             image_bytes, filename = await asyncio.wait_for(
-                self._materialize_image(image), timeout=60
+                self._materialize_image(event, image), timeout=60
             )
             self._start_background_search(
                 event=event,

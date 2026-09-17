@@ -2,7 +2,7 @@ name: astrbot_plugin_soutubot
 display_name: 搜图Bot酱搜本子
 short_desc: 使用图片或引用图片查询相似本子与作品来源
 desc: 通过 /搜本子 查询当前消息或引用消息中的图片，并可向支持 Function Calling 的模型注册窄用途搜图工具。
-version: 0.2.1
+version: 0.2.2
 author: suisuizi168
 repo: https://github.com/suisuizi168/astrbot_plugin_soutubot
 support_platforms:
