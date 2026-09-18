@@ -11,12 +11,6 @@
     "default": false,
     "hint": "关闭时 factor=1.2，开启时 factor=1.4。"
   },
-  "enable_llm_tool": {
-    "description": "启用 LLM 搜本子工具",
-    "type": "bool",
-    "default": true,
-    "hint": "仅在模型支持 Function Calling 时生效；固定 /搜本子 指令不依赖此项。"
-  },
   "timeout_seconds": {
     "description": "总请求超时（秒）",
     "type": "int",

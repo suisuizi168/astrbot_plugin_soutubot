@@ -5,7 +5,6 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -13,11 +12,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 class Image:
     def __init__(self, file=None, **kwargs) -> None:
         self.file = file
-        self.url = kwargs.get("url", "")
-        self.path = kwargs.get("path", "")
-
-    async def convert_to_file_path(self):
-        return self.path or self.file
 
     @staticmethod
     def fromURL(url: str):
@@ -57,15 +51,7 @@ class Filter:
     def command(*args, **kwargs):
         return lambda function: function
 
-    @staticmethod
-    def llm_tool(*args, **kwargs):
-        return lambda function: function
-
-
 class Logger:
-    def debug(self, *args, **kwargs) -> None:
-        pass
-
     def warning(self, *args, **kwargs) -> None:
         pass
 
@@ -112,7 +98,6 @@ Main = main_module.Main
 class Event:
     def __init__(self, messages) -> None:
         self._messages = messages
-        self.unified_msg_origin = "aiocqhttp:group:123"
 
     def get_messages(self):
         return self._messages
@@ -144,86 +129,7 @@ class MainContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(found.file, "https://img.example/quoted.jpg")
 
     async def test_missing_image_returns_none(self) -> None:
-        self.assertIsNone(await Main._extract_image(Event([Plain("/搜本子")])))
-
-    async def test_materialize_image_falls_back_from_stale_path_to_url(self) -> None:
-        class Resolver:
-            def __init__(self, ref, **kwargs) -> None:
-                self.ref = ref
-
-            async def to_bytes(self):
-                if self.ref == "C:/missing/image.jpg":
-                    raise FileNotFoundError
-                return b"valid-image-bytes"
-
-        image = Image(
-            file="legacy-file-name",
-            path="C:/missing/image.jpg",
-            url="https://img.example/current.jpg",
-        )
-        original = main_module.MediaResolver
-        main_module.MediaResolver = Resolver
-        try:
-            data, filename = await Main._materialize_image(Event([]), image)
-        finally:
-            main_module.MediaResolver = original
-        self.assertEqual(data, b"valid-image-bytes")
-        self.assertEqual(filename, "current.jpg")
-
-    async def test_materialize_image_recovers_onebot_local_reference(self) -> None:
-        class Resolver:
-            def __init__(self, ref, **kwargs) -> None:
-                self.ref = ref
-
-            async def to_bytes(self):
-                if self.ref == "C:/napcat/cache/missing.jpg":
-                    raise FileNotFoundError
-                if self.ref == "https://multimedia.example/recovered.jpg":
-                    return b"recovered-image-bytes"
-                raise AssertionError(f"unexpected ref: {self.ref}")
-
-        class OneBotResolver:
-            def __init__(self, event) -> None:
-                self.event = event
-
-            async def resolve_for_llm(self, refs):
-                self.refs = refs
-                return ["https://multimedia.example/recovered.jpg"]
-
-        image = Image(
-            file="C:/napcat/cache/missing.jpg",
-            path="C:/napcat/cache/missing.jpg",
-        )
-        original_media = main_module.MediaResolver
-        original_onebot = main_module.AstrBotImageResolver
-        main_module.MediaResolver = Resolver
-        main_module.AstrBotImageResolver = OneBotResolver
-        try:
-            data, filename = await Main._materialize_image(Event([]), image)
-        finally:
-            main_module.MediaResolver = original_media
-            main_module.AstrBotImageResolver = original_onebot
-        self.assertEqual(data, b"recovered-image-bytes")
-        self.assertEqual(filename, "recovered.jpg")
-
-    async def test_llm_tool_queues_background_search(self) -> None:
-        plugin = object.__new__(Main)
-        plugin._enable_llm_tool = True
-        plugin._closing = False
-        plugin._tasks = set()
-        plugin._max_pending_tasks = 20
-        plugin._strict_default = False
-        plugin._claim_request = AsyncMock(return_value=(True, ""))
-        plugin._extract_image = AsyncMock(return_value=Image(file="image-ref"))
-        plugin._materialize_image = AsyncMock(return_value=(b"image", "image.jpg"))
-        queued = []
-        plugin._start_background_search = lambda **kwargs: queued.append(kwargs)
-
-        result = await plugin.search_doujin_tool(Event([]), strict=True)
-
-        self.assertIn("结果会直接发送到当前会话", result)
-        self.assertEqual(len(queued), 1)
-        self.assertTrue(queued[0]["strict"])
+        self.assertIsNone(await Main._extract_image(Event([Plain("/找本")])))
 
     async def test_result_chain_contains_only_high_similarity_images(self) -> None:
         plugin = object.__new__(Main)
