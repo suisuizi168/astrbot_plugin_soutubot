@@ -71,7 +71,7 @@ class SoutubotClient:
                 timeout=timeout,
                 cookie_jar=aiohttp.CookieJar(),
                 headers={
-                    "User-Agent": "AstrBot-SoutuBotPlugin/0.1",
+                    "User-Agent": "AstrBot-SoutuBotPlugin/0.3",
                     "Accept": "application/json, text/plain, */*",
                     "Accept-Language": "zh-CN,zh;q=0.9",
                     "Origin": self.base_url,

@@ -75,6 +75,43 @@ class CurrentResponseTests(unittest.TestCase):
         self.assertIn("没有找到相似度达到 80% 的结果", text)
         self.assertNotIn("Low", text)
 
+    def test_custom_similarity_threshold_is_used(self) -> None:
+        response = SearchResponse(
+            result_id=None,
+            image_url=None,
+            items=(
+                SearchItem(65.0, "Shown", "a", "A"),
+                SearchItem(64.99, "Hidden", "b", "B"),
+            ),
+        )
+        text = format_search_response(response, min_similarity=65)
+        self.assertIn("Shown", text)
+        self.assertNotIn("Hidden", text)
+        self.assertIn("达到 65%", text)
+
+    def test_result_urls_can_be_hidden_independently(self) -> None:
+        response = SearchResponse(
+            result_id=None,
+            image_url=None,
+            items=(
+                SearchItem(
+                    90.0,
+                    "Example",
+                    "nhentai",
+                    "NHentai",
+                    page_url="https://example.test/match",
+                    source_url="https://example.test/detail",
+                ),
+            ),
+        )
+        text = format_search_response(
+            response,
+            show_match_page_url=False,
+            show_detail_page_url=True,
+        )
+        self.assertNotIn("匹配页", text)
+        self.assertIn("详情页：https://example.test/detail", text)
+
     def test_unsafe_urls_are_discarded(self) -> None:
         self.assertIsNone(safe_http_url("javascript:alert(1)"))
         self.assertIsNone(safe_http_url("file:///tmp/a.jpg"))

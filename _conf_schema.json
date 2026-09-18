@@ -42,9 +42,37 @@
     "hint": "允许范围 1-50。"
   },
   "max_results": {
-    "description": "聊天中展示的结果数",
+    "description": "最多展示条数",
     "type": "int",
     "default": 3,
-    "hint": "允许范围 1-10；完整结果始终附带网页链接。"
+    "min": 1,
+    "max": 10,
+    "hint": "允许范围 1-10；超过数量时优先展示相似度更高的结果。"
+  },
+  "min_similarity": {
+    "description": "最低相似度（%）",
+    "type": "float",
+    "default": 80,
+    "min": 0,
+    "max": 100,
+    "hint": "允许范围 0-100；只展示相似度达到此数值的结果。"
+  },
+  "show_match_page_url": {
+    "description": "显示匹配页地址",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后不在单条结果中显示“匹配页”地址。"
+  },
+  "show_detail_page_url": {
+    "description": "显示详情页地址",
+    "type": "bool",
+    "default": true,
+    "hint": "关闭后不在单条结果中显示“详情页”地址。"
+  },
+  "show_preview_image": {
+    "description": "显示预览图片",
+    "type": "bool",
+    "default": true,
+    "hint": "结果含有预览图时一并发送；关闭后仅发送文字。"
   }
 }

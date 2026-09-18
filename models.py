@@ -256,7 +256,13 @@ def format_match_header(
     return f"找到 {qualified_count} 条相似度达到 {threshold} 的结果："
 
 
-def format_search_item(item: SearchItem, index: int) -> str:
+def format_search_item(
+    item: SearchItem,
+    index: int,
+    *,
+    show_match_page_url: bool = True,
+    show_detail_page_url: bool = True,
+) -> str:
     source = item.source_name
     if item.source_id:
         source += f" #{item.source_id}"
@@ -265,9 +271,13 @@ def format_search_item(item: SearchItem, index: int) -> str:
         f"{index}. {_shorten(item.title)}",
         f"相似度：{item.score:.2f}%｜来源：{source}{page}",
     ]
-    if item.page_url:
+    if show_match_page_url and item.page_url:
         lines.append(f"匹配页：{item.page_url}")
-    if item.source_url and item.source_url != item.page_url:
+    if (
+        show_detail_page_url
+        and item.source_url
+        and item.source_url != item.page_url
+    ):
         lines.append(f"详情页：{item.source_url}")
     return "\n".join(lines)
 
@@ -287,6 +297,8 @@ def format_search_response(
     *,
     max_results: int = 3,
     min_similarity: float = MIN_SIMILARITY,
+    show_match_page_url: bool = True,
+    show_detail_page_url: bool = True,
 ) -> str:
     selected, qualified_count = select_search_items(
         response,
@@ -301,6 +313,16 @@ def format_search_response(
         )
     ]
     for index, item in enumerate(selected, start=1):
-        lines.extend(["", format_search_item(item, index)])
+        lines.extend(
+            [
+                "",
+                format_search_item(
+                    item,
+                    index,
+                    show_match_page_url=show_match_page_url,
+                    show_detail_page_url=show_detail_page_url,
+                ),
+            ]
+        )
     lines.extend(["", format_search_footer(response)])
     return "\n".join(lines).strip()

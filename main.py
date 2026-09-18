@@ -22,7 +22,6 @@ from .client import (
 )
 from .image_utils import ImagePreparationError, prepare_image_async
 from .models import (
-    MIN_SIMILARITY,
     SearchResponse,
     format_match_header,
     format_search_footer,
@@ -35,6 +34,16 @@ from .policy import AccessPolicy, CooldownManager
 def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     try:
         number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return min(max(number, minimum), maximum)
+
+
+def _bounded_float(
+    value: Any, default: float, minimum: float, maximum: float
+) -> float:
+    try:
+        number = float(value)
     except (TypeError, ValueError):
         number = default
     return min(max(number, minimum), maximum)
@@ -57,6 +66,18 @@ class Main(Star):
         self._top_k = _bounded_int(self.config.get("top_k"), 25, 1, 50)
         self._max_results = _bounded_int(
             self.config.get("max_results"), 3, 1, 10
+        )
+        self._min_similarity = _bounded_float(
+            self.config.get("min_similarity"), 80.0, 0.0, 100.0
+        )
+        self._show_match_page_url = bool(
+            self.config.get("show_match_page_url", True)
+        )
+        self._show_detail_page_url = bool(
+            self.config.get("show_detail_page_url", True)
+        )
+        self._show_preview_image = bool(
+            self.config.get("show_preview_image", True)
         )
         self._max_pending_tasks = _bounded_int(
             self.config.get("max_pending_tasks"), 20, 1, 100
@@ -142,7 +163,7 @@ class Main(Star):
     def _build_result_chain(self, response: SearchResponse) -> MessageChain:
         selected, qualified_count = select_search_items(
             response,
-            min_similarity=MIN_SIMILARITY,
+            min_similarity=self._min_similarity,
             max_results=self._max_results,
         )
         components: list[Any] = [
@@ -150,14 +171,24 @@ class Main(Star):
                 format_match_header(
                     qualified_count,
                     len(selected),
-                    min_similarity=MIN_SIMILARITY,
+                    min_similarity=self._min_similarity,
                 )
             )
         ]
         for index, item in enumerate(selected, start=1):
-            if item.thumbnail_url:
+            if self._show_preview_image and item.thumbnail_url:
                 components.append(Comp.Image.fromURL(item.thumbnail_url))
-            components.append(Comp.Plain("\n" + format_search_item(item, index)))
+            components.append(
+                Comp.Plain(
+                    "\n"
+                    + format_search_item(
+                        item,
+                        index,
+                        show_match_page_url=self._show_match_page_url,
+                        show_detail_page_url=self._show_detail_page_url,
+                    )
+                )
+            )
         components.append(Comp.Plain("\n\n" + format_search_footer(response)))
         return MessageChain(components)
 

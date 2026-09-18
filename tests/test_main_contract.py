@@ -134,6 +134,10 @@ class MainContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_result_chain_contains_only_high_similarity_images(self) -> None:
         plugin = object.__new__(Main)
         plugin._max_results = 3
+        plugin._min_similarity = 80.0
+        plugin._show_match_page_url = True
+        plugin._show_detail_page_url = True
+        plugin._show_preview_image = True
         response = models_module.SearchResponse(
             result_id="private-result-id",
             image_url=None,
@@ -164,6 +168,47 @@ class MainContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("79.90%", text)
         self.assertNotIn("private-result-id", text)
         self.assertIn("来源于搜图Bot酱", text)
+
+    async def test_result_chain_respects_display_configuration(self) -> None:
+        plugin = object.__new__(Main)
+        plugin._max_results = 1
+        plugin._min_similarity = 50.0
+        plugin._show_match_page_url = False
+        plugin._show_detail_page_url = False
+        plugin._show_preview_image = False
+        response = models_module.SearchResponse(
+            result_id=None,
+            image_url=None,
+            items=(
+                models_module.SearchItem(
+                    score=60.0,
+                    title="Shown",
+                    source_key="nhentai",
+                    source_name="NHentai",
+                    thumbnail_url="https://img.example/preview.jpg",
+                    page_url="https://example.test/match",
+                    source_url="https://example.test/detail",
+                ),
+                models_module.SearchItem(
+                    score=59.0,
+                    title="Limited",
+                    source_key="nhentai",
+                    source_name="NHentai",
+                ),
+            ),
+        )
+        chain = plugin._build_result_chain(response)
+        images = [segment for segment in chain if isinstance(segment, Image)]
+        text = "".join(
+            segment.text for segment in chain if isinstance(segment, Plain)
+        )
+        self.assertEqual(images, [])
+        self.assertIn("达到 50%", text)
+        self.assertIn("展示前 1 条", text)
+        self.assertIn("Shown", text)
+        self.assertNotIn("Limited", text)
+        self.assertNotIn("匹配页", text)
+        self.assertNotIn("详情页", text)
 
 
 if __name__ == "__main__":

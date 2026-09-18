@@ -1,8 +1,8 @@
 name: astrbot_plugin_soutubot
-display_name: 搜图Bot酱搜本子
-short_desc: 使用图片或引用图片查询相似本子与作品来源
-desc: 通过 /找本 查询当前消息或引用消息中的图片。
-version: 0.2.0
+display_name: 搜图Bot酱找本
+short_desc: 调用搜图Bot酱@soutubot，简单的调用工具
+desc: 通过 /找本 查询当前消息或引用消息中的图片，可配置相似度、展示数量、链接与预览图。
+version: 0.3.0
 author: suisuizi168
 repo: https://github.com/suisuizi168/astrbot_plugin_soutubot
 support_platforms:
