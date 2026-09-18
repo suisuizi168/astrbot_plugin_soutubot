@@ -15,14 +15,63 @@
 
 ## 安装
 
-将仓库放入 AstrBot 的 `data/plugins/astrbot_plugin_soutubot`，安装依赖并重载插件：
+### 方式一：AstrBot 插件市场（上架后推荐）
+
+插件通过审核并上架后，进入 AstrBot WebUI 的 **插件 → 插件市场**，搜索 **搜图Bot酱找本**，点击安装即可。AstrBot 会下载插件，并根据仓库内的 `requirements.txt` 自动处理 Python 依赖；不需要另外对接安装接口，也不需要在 README 中嵌入安装按钮。
+
+> 插件尚未通过市场审核时，市场中不会出现这一安装入口，此时可使用下面的 URL 或 ZIP 安装方式。
+
+### 方式二：通过仓库链接安装
+
+在 AstrBot WebUI 的插件页面点击右下角的 `+`，选择通过 URL 安装，填入：
+
+```text
+https://github.com/suisuizi168/astrbot_plugin_soutubot
+```
+
+仓库公开后可以直接使用该方式。私有仓库无法由未配置 GitHub 凭据的 AstrBot 实例直接下载。
+
+### 方式三：通过 ZIP 文件安装
+
+在 GitHub 仓库页面选择 **Code → Download ZIP**，然后在 AstrBot WebUI 的插件安装窗口选择文件上传，直接上传下载到的 `.zip` 文件，无需手动解压。
+
+### 方式四：手动安装
+
+在 AstrBot 根目录执行：
+
+```bash
+cd data/plugins
+git clone https://github.com/suisuizi168/astrbot_plugin_soutubot.git
+```
+
+安装完成后，在 WebUI 中重载插件或重启 AstrBot。
+
+正常情况下，AstrBot 会根据 `requirements.txt` 自动安装以下依赖：
 
 ```text
 aiohttp>=3.9,<4
 Pillow>=10,<13
 ```
 
-也可以通过 AstrBot WebUI 从 Git 仓库安装。
+如果自动安装依赖失败，请优先在 AstrBot WebUI 的依赖安装功能中安装上述包，以确保依赖进入 AstrBot 实际使用的 Python 环境，而不是系统中的其他 Python 环境。
+
+## 插件市场发布说明
+
+本仓库已经包含市场识别和一键安装所需的主要文件：
+
+- `metadata.yaml`：插件身份、版本、展示名、简介、仓库地址和支持平台。
+- `requirements.txt`：安装时需要处理的第三方依赖。
+- `_conf_schema.json`：WebUI 可视化配置项。
+- `LICENSE` 与本说明文档。
+
+提交市场前还需要完成：
+
+1. 将 GitHub 仓库设为公开，并确认默认分支可匿名访问。
+2. 在 AstrBot 插件发布页面登录 AstrBot Cloud 账号并提交仓库。
+3. 提交时保证市场记录中的 `author`、`name`、`version` 与 `metadata.yaml` 完全一致。
+4. 后续发布新版本时先更新 `metadata.yaml` 中的 `version`，再推送代码并更新市场记录。
+
+市场安装会使用市场记录中的下载地址；未单独提供下载地址时，会直接使用 `metadata.yaml` 中声明的 GitHub 仓库。因此，上架后即可由插件市场一键安装，不需要本插件额外开发安装接口。
 
 ## 使用
 
