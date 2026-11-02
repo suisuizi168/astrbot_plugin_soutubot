@@ -1,0 +1,1298 @@
+{
+  "general": {
+    "description": "通用设置",
+    "type": "object",
+    "hint": "会话权限、任务容量、通用冷却与 LLM 工具入口。",
+    "items": {
+      "trigger_nickname": {
+        "description": "触发昵称",
+        "type": "string",
+        "default": "",
+        "hint": "留空不启用昵称指令，不影响原有 @ 或 / 指令。填写如小岁后，可附图或引用图片发送“小岁找鸡”“小岁找本”“小岁搜图”，昵称与指令之间可加空格。仅完整匹配当前消息，沿用各功能白名单、开关与冷却。"
+      },
+      "whitelist": {
+        "description": "会话白名单",
+        "type": "list",
+        "default": [],
+        "hint": "留空时全部会话可用；群聊填写群号，私聊填写用户 ID。配置后仅允许列表中的会话使用。"
+      },
+      "cooldown_seconds": {
+        "description": "单用户冷却（秒）",
+        "type": "int",
+        "default": 30,
+        "hint": "控制找本、搜图和搜本的冷却；找鸡使用独立冷却。设为 0 可关闭。"
+      },
+      "max_pending_tasks": {
+        "description": "最大待处理任务数",
+        "type": "int",
+        "default": 20,
+        "hint": "超过上限的新请求会立即失败，不会无限排队。"
+      },
+      "llm_tools_enabled": {
+        "description": "总开关（工具入口与 JM 辅助）",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后不允许 LLM 工具调用，也不使用模型提取 JM 查询词或核验候选；固定指令仍可使用，JM 查询直接传入原始标题。"
+      },
+      "download_confirmation_timeout_seconds": {
+        "description": "下载确认有效期（秒）",
+        "type": "int",
+        "default": 600,
+        "min": 30,
+        "max": 3600,
+        "hint": "找本和搜本匹配成功后，原查询者须在当前会话此时限内回复“下载”。从询问发送完成后计时；与下载任务超时独立。范围 30–3600 秒。"
+      }
+    }
+  },
+  "book_search": {
+    "description": "找本 · Soutubot",
+    "type": "object",
+    "hint": "找本指令的搜索参数、超时与结果展示。",
+    "items": {
+      "strict_mode": {
+        "description": "指令默认使用严格模式",
+        "type": "bool",
+        "default": false,
+        "hint": "关闭时 factor=1.2，开启时 factor=1.4。"
+      },
+      "timeout_seconds": {
+        "description": "搜图服务网络超时（秒）",
+        "type": "int",
+        "default": 300,
+        "hint": "底层搜图服务的连接/读取超时，范围 10-600 秒；整轮结果返回时限由“搜图结果返回超时”控制。"
+      },
+      "search_result_timeout_seconds": {
+        "description": "搜图结果返回超时（秒）",
+        "type": "int",
+        "default": 60,
+        "min": 5,
+        "max": 600,
+        "hint": "从开始搜图到原始结果消息发送完成的总时限；超时会中断本次操作并提示，不再继续 JM 查询。"
+      },
+      "max_concurrency": {
+        "description": "最大并发搜索数",
+        "type": "int",
+        "default": 2,
+        "hint": "建议保持 1-2，避免触发网站限流。"
+      },
+      "top_k": {
+        "description": "网站检索候选数",
+        "type": "int",
+        "default": 25,
+        "hint": "允许范围 1-50。"
+      },
+      "max_results": {
+        "description": "最多展示条数",
+        "type": "int",
+        "default": 3,
+        "min": 1,
+        "max": 10,
+        "hint": "允许范围 1-10；超过数量时优先展示相似度更高的结果。"
+      },
+      "min_similarity": {
+        "description": "最低相似度（%）",
+        "type": "float",
+        "default": 80.0,
+        "min": 0,
+        "max": 100,
+        "hint": "允许范围 0-100；只展示相似度达到此数值的结果。"
+      },
+      "show_match_page_url": {
+        "description": "显示匹配页地址",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后不在单条结果中显示“匹配页”地址。"
+      },
+      "show_detail_page_url": {
+        "description": "显示详情页地址",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后不在单条结果中显示“详情页”地址。"
+      },
+      "show_preview_image": {
+        "description": "显示预览图片",
+        "type": "bool",
+        "default": true,
+        "hint": "结果含有预览图时一并发送；关闭后仅发送文字。"
+      }
+    }
+  },
+  "image_search": {
+    "description": "搜图",
+    "type": "object",
+    "hint": "多引擎查询与找本兜底；Google Lens 的密钥、查询和缓存也供找鸡共用。",
+    "items": {
+      "multi_search_enabled": {
+        "description": "启用多引擎搜图",
+        "type": "bool",
+        "default": true,
+        "hint": "/搜图 直接并行查询已开启的来源，仅展示结果；/找本 仅在 soutubot 未达标或请求失败时使用多引擎兜底。关闭后 /搜图 不可用，/找本 仍可查询 soutubot。"
+      },
+      "saucenao_enabled": {
+        "description": "启用 SauceNAO",
+        "type": "bool",
+        "default": true,
+        "hint": "多引擎总开关开启时生效；未配置 API Key 会跳过。"
+      },
+      "saucenao_api_key": {
+        "description": "SauceNAO API Key",
+        "type": "string",
+        "default": "",
+        "hint": "仅用于 SauceNAO 检索，不会发送到聊天或日志。"
+      },
+      "saucenao_min_similarity": {
+        "description": "SauceNAO 最低相似度",
+        "type": "int",
+        "default": 50,
+        "hint": "仅过滤 SauceNAO 结果，与 soutubot 达标阈值独立。"
+      },
+      "yandex_enabled": {
+        "description": "启用 Yandex",
+        "type": "bool",
+        "default": true,
+        "hint": "用于一般图片溯源；相关/相似页面不能视为已确认作品。"
+      },
+      "ascii2d_enabled": {
+        "description": "启用 ascii2d",
+        "type": "bool",
+        "default": false,
+        "hint": "依赖网站可访问性；默认关闭，可单独开启。"
+      },
+      "ascii2d_bovw": {
+        "description": "ascii2d 特征搜索",
+        "type": "bool",
+        "default": false,
+        "hint": "启用后额外查询特征检索页。"
+      },
+      "multi_search_timeout_seconds": {
+        "description": "每个搜索源总超时（秒）",
+        "type": "int",
+        "default": 30,
+        "hint": "范围 5–120；一个来源失败不会丢失其他来源结果。"
+      },
+      "multi_search_cache_ttl": {
+        "description": "多引擎缓存时长（秒）",
+        "type": "int",
+        "default": 3600,
+        "hint": "0 关闭缓存；最多缓存 128 个来源/图片结果。"
+      },
+      "google_lens_search_enabled": {
+        "description": "Google Lens · 参与搜图与找本兜底",
+        "type": "bool",
+        "default": true,
+        "hint": "与已开启的多引擎并行；遵循多引擎总开关。不会改变找本的 soutubot 优先流程。"
+      },
+      "google_lens_findchicken_enabled": {
+        "description": "Google Lens · 参与找鸡",
+        "type": "bool",
+        "default": true,
+        "hint": "找鸡同时查询 SauceNAO 与 Google Lens，不是失败后兜底；不受多引擎总开关影响。"
+      },
+      "google_lens_api_key": {
+        "description": "Google Lens · SerpAPI API Key",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "在 https://serpapi.com/manage-api-key 获取；两个入口共用此 Key。未填写时跳过 Google，不影响其他来源。"
+      },
+      "google_lens_proxy": {
+        "description": "Google Lens · HTTP/HTTPS 代理",
+        "type": "string",
+        "default": "",
+        "hint": "仅用于 SerpAPI；留空直连，不继承其他搜索源的代理。"
+      },
+      "google_lens_timeout_seconds": {
+        "description": "Google Lens · 总超时（秒）",
+        "type": "int",
+        "default": 30,
+        "min": 5,
+        "max": 120,
+        "hint": "包含排队、压缩、上传和查询；超时保留其他来源结果。"
+      },
+      "google_lens_search_type": {
+        "description": "Google Lens · 查询类型",
+        "type": "string",
+        "default": "all",
+        "options": [
+          "visual_matches",
+          "exact_matches",
+          "all"
+        ],
+        "hint": "默认全部，与 Google 网页“全部”入口对应，合并同图、视觉和网页候选；exact_matches 仅同图。Google 不提供百分比相似度。"
+      },
+      "google_lens_retry_empty": {
+        "description": "Google Lens · 空结果补查",
+        "type": "bool",
+        "default": true,
+        "hint": "全部/外观匹配返回空候选时切换另一模式补查一次，最多两次计费搜索，共用原总超时和已上传图片；同图模式不扩展。可关闭以节省额度。"
+      },
+      "google_lens_expand_sources": {
+        "description": "Google Lens · 缺少 X 候选时补查",
+        "type": "bool",
+        "default": true,
+        "hint": "已有结果但没有可解析账号的 X 发布链接时，补查另一模式并合并候选；LLM 优先检查 X，无合适 X 再看其他平台。未知站点仍保留。与空结果补查合计最多两次搜索、共用总超时；可关闭以节省额度。"
+      },
+      "google_lens_max_results": {
+        "description": "Google Lens · 最多展示结果数",
+        "type": "int",
+        "default": 3,
+        "min": 1,
+        "max": 10,
+        "hint": "1～10，仅控制搜图及找本兜底展示；Google 候选缓存保留每模式最多 60 条，找鸡使用独立候选上限。"
+      },
+      "google_lens_cache_ttl": {
+        "description": "Google Lens · 结果缓存（秒）",
+        "type": "int",
+        "default": 3600,
+        "min": 0,
+        "max": 86400,
+        "hint": "0 关闭；最多 128 项。非空结果按设置缓存，空结果最多缓存 30 秒，到期绕过上游旧缓存；请求失败不缓存。同图跨入口共享查询。"
+      }
+    }
+  },
+  "findchicken": {
+    "description": "找鸡 · 作者与来源",
+    "type": "object",
+    "hint": "独立的查询阈值、候选池、冷却及作者识别模型。",
+    "items": {
+      "findchicken_enabled": {
+        "description": "启用找鸡",
+        "type": "bool",
+        "default": true,
+        "hint": "先回复“收到，开始找鸡”，并行搜索后识别作者、账号和出处；沿用白名单，不受多引擎、通用 LLM 工具、JM/NH 开关控制。"
+      },
+      "findchicken_api_key": {
+        "description": "SauceNAO API Key",
+        "type": "string",
+        "default": "",
+        "secret": true,
+        "hint": "仅用于找鸡，与多引擎搜图的 API Key 分开保存；在 SauceNAO 账号的 Search API 页面获取。"
+      },
+      "findchicken_proxy": {
+        "description": "HTTP/HTTPS 代理",
+        "type": "string",
+        "default": "",
+        "hint": "仅用于找鸡，例如 http://127.0.0.1:7890；留空直连，不继承搜图或 JM 的代理配置。"
+      },
+      "findchicken_timeout_seconds": {
+        "description": "查询超时（秒）",
+        "type": "int",
+        "default": 30,
+        "min": 5,
+        "max": 120,
+        "hint": "分别限制排队及图片准备阶段、SauceNAO 查询阶段；Google 使用独立总超时，一个来源超时不丢失另一来源结果。"
+      },
+      "findchicken_candidate_limit": {
+        "description": "每个来源的候选数量",
+        "type": "int",
+        "default": 30,
+        "hint": "1～60。每个来源供 LLM 筛选的候选上限；Google 每模式最多收集 60 条，SauceNAO 单次最多请求 30 条。最终只展示一条，不改变搜图展示数量。",
+        "min": 1,
+        "max": 60
+      },
+      "findchicken_similarity_threshold": {
+        "description": "最低相似度（%）",
+        "type": "float",
+        "default": 30.0,
+        "min": 0,
+        "max": 100,
+        "hint": "只过滤找鸡 SauceNAO 的结果，与搜图设置独立；Google 没有百分比相似度，不使用此阈值。"
+      },
+      "findchicken_show_similarity": {
+        "description": "显示相似度",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后在“视觉匹配”后显示接口提供的真实分数；Google 没有百分比分数，不补造。"
+      },
+      "findchicken_cooldown_seconds": {
+        "description": "单用户冷却（秒）",
+        "type": "int",
+        "default": 10,
+        "min": 0,
+        "max": 600,
+        "hint": "独立于找本、搜图、搜本的冷却记录，0 表示不限制。"
+      },
+      "findchicken_llm_enabled": {
+        "description": "启用 LLM 作者识别与来源判断",
+        "type": "bool",
+        "default": true,
+        "hint": "仅影响找鸡。让 LLM 从所有候选中优先查找原作者并整理名字；没有选中或模型失败时按真实相似度优先、Google 排名其次返回一条匹配来源，不编造缺失信息。不发送原图。关闭后直接展示最高匹配来源。"
+      },
+      "findchicken_llm_provider": {
+        "description": "作者识别模型",
+        "type": "string",
+        "default": "",
+        "_special": "select_provider",
+        "hint": "从 Bot 已配置的聊天模型中选择；留空跟随当前会话模型。只需文本能力，用搜索元数据和公开发布页信息整理原作者身份，不重复判断原图。"
+      },
+      "findchicken_llm_timeout_seconds": {
+        "description": "LLM 判断超时（秒）",
+        "type": "int",
+        "default": 60,
+        "hint": "10～180 秒，独立于搜索超时；每次找鸡最多调用模型一次，不调用工具、不带聊天记录。"
+      }
+    }
+  },
+  "jm": {
+    "description": "JM 查询与下载",
+    "type": "object",
+    "hint": "查询、模型辅助与下载；PDF 选项统一放在 PDF 区域。",
+    "items": {
+      "search": {
+        "description": "查询与匹配",
+        "type": "object",
+        "hint": "JM 总开关、网络设置与候选匹配。",
+        "items": {
+          "jm_enabled": {
+            "description": "总开关（查询与下载）",
+            "type": "bool",
+            "default": true,
+            "hint": "统一控制搜图后的 JM 查询与下载、/搜本、/jm 和 JM 工具。关闭后全部 JM 查询、下载停止；NH 和搜图不受影响。"
+          },
+          "jm_title_search_enabled": {
+            "description": "启用 JM 标题检索",
+            "type": "bool",
+            "default": true,
+            "hint": "关闭后跳过标题检索，直接尝试作者作品匹配。"
+          },
+          "jm_author_search_enabled": {
+            "description": "启用 JM 作者作品匹配",
+            "type": "bool",
+            "default": true,
+            "hint": "仅在标题未确认作品时，按模型提取的作者/社团查询作品并核验。"
+          },
+          "jm_retry_times": {
+            "description": "JM 查询重试次数",
+            "type": "int",
+            "default": 0,
+            "min": 0,
+            "max": 1,
+            "hint": "默认不重试，避免放大等待时间。"
+          },
+          "jm_max_concurrency": {
+            "description": "JM 查询并发数",
+            "type": "int",
+            "default": 5,
+            "min": 1,
+            "max": 5,
+            "hint": "标题和作者查询共享此并发上限。"
+          },
+          "jm_domain_list": {
+            "description": "JM API 域名优先列表",
+            "type": "list",
+            "default": [],
+            "hint": "通常留空以使用 jmcomic 当前域名发现机制。"
+          },
+          "jm_proxy": {
+            "description": "JM 代理设置",
+            "type": "string",
+            "default": "system",
+            "hint": "网络排障项；system 使用系统代理，空值不额外指定。不要填写凭据。"
+          },
+          "jm_auto_select_threshold": {
+            "description": "JM 自动确认阈值",
+            "type": "float",
+            "default": 90.0,
+            "min": 80,
+            "max": 100,
+            "hint": "达到阈值且领先候选足够多时才直接显示 JM 号。"
+          },
+          "jm_min_candidate_threshold": {
+            "description": "JM 候选最低阈值",
+            "type": "float",
+            "default": 55.0,
+            "min": 0,
+            "max": 90,
+            "hint": "低于此分数不显示候选。"
+          },
+          "jm_auto_select_margin": {
+            "description": "JM 自动确认领先分差",
+            "type": "float",
+            "default": 8.0,
+            "min": 0,
+            "max": 30,
+            "hint": "第一名与第二名的最小分差，避免相近标题被误报。"
+          },
+          "jm_author_max_pages": {
+            "description": "每位作者最大查询页数",
+            "type": "int",
+            "default": 3,
+            "min": 1,
+            "max": 5,
+            "hint": "作者作品过多时的网络与响应时间上限。"
+          },
+          "jm_author_max_candidates": {
+            "description": "作者兜底候选上限",
+            "type": "int",
+            "default": 60,
+            "min": 10,
+            "max": 100,
+            "hint": "只将此前若干 JM 官方标题交给模型核验，避免超大响应。"
+          }
+        }
+      },
+      "llm": {
+        "description": "LLM 辅助",
+        "type": "object",
+        "hint": "JM 查询词与候选核验；受通用 LLM 工具总开关控制。",
+        "items": {
+          "jm_llm_enabled": {
+            "description": "辅助 JM 查询",
+            "type": "bool",
+            "default": true,
+            "hint": "不开启的话精度极低。仅在 LLM 总开关开启时生效；关闭时使用原始标题，不做模型关键词提取和候选核验。"
+          },
+          "jm_llm_timeout_seconds": {
+            "description": "JM 查询词 LLM 超时（秒）",
+            "type": "int",
+            "default": 20,
+            "min": 3,
+            "max": 60,
+            "hint": "LLM 超时只跳过 JM 补充，不影响已发送的搜图结果。"
+          },
+          "jm_max_queries": {
+            "description": "LLM 标题检索词数量",
+            "type": "int",
+            "default": 3,
+            "min": 1,
+            "max": 5,
+            "hint": "模型最多提取的中日文基础标题词数量；简体中文会额外生成繁体变体并一同查询。"
+          },
+          "jm_max_authors": {
+            "description": "JM 作者兜底查询数量",
+            "type": "int",
+            "default": 2,
+            "min": 1,
+            "max": 3,
+            "hint": "标题阶段未确凿命中时，最多并发查询的模型提取作者/社团数量。"
+          },
+          "jm_llm_verify_threshold": {
+            "description": "LLM 候选自动确认阈值",
+            "type": "float",
+            "default": 85.0,
+            "min": 70,
+            "max": 100,
+            "hint": "模型只能从 JM 已返回候选中选择；达到此匹配度才自动确认。"
+          }
+        }
+      },
+      "download": {
+        "description": "下载与并发",
+        "type": "object",
+        "hint": "下载时限、并发量及缓存管理权限。",
+        "items": {
+          "jm_download_timeout_seconds": {
+            "description": "JM 下载超时（秒）",
+            "type": "int",
+            "default": 600,
+            "min": 60,
+            "max": 3600,
+            "hint": "单本从开始下载到 PDF 生成完成的最长时间。"
+          },
+          "jm_download_max_concurrency": {
+            "description": "同时下载的 JM 作品数",
+            "type": "int",
+            "default": 1,
+            "min": 1,
+            "max": 4,
+            "hint": "限制同时下载的不同作品数量；每本作品内部还会并发下载图片。"
+          },
+          "jm_download_image_concurrency": {
+            "description": "单本图片下载并发数",
+            "type": "int",
+            "default": 10,
+            "min": 1,
+            "max": 30,
+            "hint": "控制同一本作品同时请求的图片数量；数值越大可能越快，也会增加网络压力。"
+          },
+          "jm_download_photo_concurrency": {
+            "description": "单本章节下载并发数",
+            "type": "int",
+            "default": 2,
+            "min": 1,
+            "max": 8,
+            "hint": "控制同一本作品同时处理的章节数量，建议保持默认值。"
+          },
+          "jm_manage_users": {
+            "description": "JM 缓存管理员用户 ID",
+            "type": "list",
+            "default": [],
+            "hint": "填写允许执行 /jm清理 的用户 ID。留空时关闭手动缓存清理命令；仍须通过插件白名单。"
+          }
+        }
+      }
+    }
+  },
+  "nh": {
+    "description": "NH 下载",
+    "type": "object",
+    "hint": "下载开关、时限和并发量；PDF 选项统一放在 PDF 区域。",
+    "items": {
+      "nh_download_enabled": {
+        "description": "启用 NH 下载",
+        "type": "bool",
+        "default": true,
+        "hint": "默认开启；soutubot 达标目标包含 NH 编号/链接时优先下载 NH，也允许明确编号指令与 NH 工具调用。已有配置若为关闭则保留原值。"
+      },
+      "nh_download_timeout_seconds": {
+        "description": "NH 下载及 PDF 总超时（秒）",
+        "type": "int",
+        "default": 600,
+        "hint": "范围 60–3600；包含排队、下载和 PDF 生成。"
+      },
+      "nh_download_max_concurrency": {
+        "description": "NH 最大同时处理作品数",
+        "type": "int",
+        "default": 1,
+        "hint": "范围 1–4，与 JM 并发独立。"
+      },
+      "nh_image_concurrency": {
+        "description": "NH 图片并发数",
+        "type": "int",
+        "default": 4,
+        "hint": "范围 1–10；每部作品最多 2000 页、原始图片总大小最多 1 GiB。"
+      }
+    }
+  },
+  "pdf": {
+    "description": "PDF",
+    "type": "object",
+    "hint": "JM 与 NH 的 PDF 密码、缓存及发送设置分别生效。",
+    "items": {
+      "jm": {
+        "description": "JM PDF",
+        "type": "object",
+        "hint": "JM PDF 密码、文件大小、缓存保留与清理。",
+        "items": {
+          "jm_pdf_password_enabled": {
+            "description": "是否启用 PDF 密码",
+            "type": "bool",
+            "default": true,
+            "hint": "默认开启；关闭时 PDF 无密码。开启时使用固定密码，固定密码留空则使用纯数字 JM 号。"
+          },
+          "jm_pdf_fixed_password": {
+            "description": "PDF 固定密码",
+            "type": "string",
+            "default": "",
+            "hint": "仅在启用 PDF 密码时生效；留空使用纯数字 JM 号。实际密码会随上传提示发送到当前会话。"
+          },
+          "jm_pdf_cache_enabled": {
+            "description": "保留并复用 PDF 缓存",
+            "type": "bool",
+            "default": true,
+            "hint": "开启后相同 JM 号可直接发送本地 PDF，避免重复访问和下载。"
+          },
+          "jm_pdf_cache_ttl_hours": {
+            "description": "PDF 缓存有效期（小时）",
+            "type": "int",
+            "default": 168,
+            "min": 0,
+            "max": 8760,
+            "hint": "默认保留 7 天；设为 0 表示不过期。过期文件会在再次请求该作品时重建。"
+          },
+          "jm_max_pdf_size_mb": {
+            "description": "PDF 直接发送大小上限（MB）",
+            "type": "int",
+            "default": 200,
+            "min": 1,
+            "max": 500,
+            "hint": "超过此大小时不尝试发送，PDF 仍保留在本地缓存；平台自身也可能有更低限制。"
+          },
+          "jm_cleanup_images_after_pdf": {
+            "description": "PDF 成功后清理图片缓存",
+            "type": "bool",
+            "default": true,
+            "hint": "仅在 PDF 已生成并验证有效后删除该作品的原始图片；失败时保留图片以便重试。"
+          },
+          "jm_cleanup_pdf_after_send": {
+            "description": "发送成功后删除 PDF",
+            "type": "bool",
+            "default": false,
+            "hint": "开启后仅在机器人确认发送成功后删除 PDF；默认保留以便后续复用。"
+          }
+        }
+      },
+      "nh": {
+        "description": "NH PDF",
+        "type": "object",
+        "hint": "NH PDF 密码、文件大小与缓存。",
+        "items": {
+          "nh_pdf_password_enabled": {
+            "description": "NH PDF 密码",
+            "type": "bool",
+            "default": true,
+            "hint": "开启时使用固定密码；固定密码留空则使用纯数字 NH 编号。"
+          },
+          "nh_pdf_fixed_password": {
+            "description": "NH PDF 固定密码",
+            "type": "string",
+            "default": "",
+            "hint": "留空使用 NH 编号；实际密码会随发送提示显示。"
+          },
+          "nh_pdf_cache_enabled": {
+            "description": "NH PDF 缓存",
+            "type": "bool",
+            "default": true,
+            "hint": "缓存保留 7 天，按密码区分；失败时保留完整图片以便重试 PDF。"
+          },
+          "nh_max_pdf_size_mb": {
+            "description": "NH PDF 发送大小上限（MB）",
+            "type": "int",
+            "default": 200,
+            "hint": "范围 1–500；超出后保留文件。"
+          }
+        }
+      }
+    }
+  },
+  "llm_tools_enabled": {
+    "description": "LLM｜总开关（工具入口与 JM 辅助）",
+    "type": "bool",
+    "default": null,
+    "hint": "关闭后不允许 LLM 工具调用，也不使用模型提取 JM 查询词或核验候选；固定指令仍可使用，JM 查询直接传入原始标题。",
+    "invisible": true
+  },
+  "jm_llm_enabled": {
+    "description": "LLM｜辅助 JM 查询",
+    "type": "bool",
+    "default": null,
+    "hint": "不开启的话精度极低。仅在 LLM 总开关开启时生效；关闭时使用原始标题，不做模型关键词提取和候选核验。",
+    "invisible": true
+  },
+  "jm_llm_timeout_seconds": {
+    "description": "LLM｜JM 查询词 LLM 超时（秒）",
+    "type": "int",
+    "default": null,
+    "min": 3,
+    "max": 60,
+    "hint": "LLM 超时只跳过 JM 补充，不影响已发送的搜图结果。",
+    "invisible": true
+  },
+  "jm_max_queries": {
+    "description": "LLM｜LLM 标题检索词数量",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 5,
+    "hint": "模型最多提取的中日文基础标题词数量；简体中文会额外生成繁体变体并一同查询。",
+    "invisible": true
+  },
+  "jm_max_authors": {
+    "description": "LLM｜JM 作者兜底查询数量",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 3,
+    "hint": "标题阶段未确凿命中时，最多并发查询的模型提取作者/社团数量。",
+    "invisible": true
+  },
+  "jm_llm_verify_threshold": {
+    "description": "LLM｜LLM 候选自动确认阈值",
+    "type": "float",
+    "default": null,
+    "min": 70,
+    "max": 100,
+    "hint": "模型只能从 JM 已返回候选中选择；达到此匹配度才自动确认。",
+    "invisible": true
+  },
+  "whitelist": {
+    "description": "搜图与通用｜会话白名单",
+    "type": "list",
+    "default": null,
+    "hint": "留空时全部会话可用；群聊填写群号，私聊填写用户 ID。配置后仅允许列表中的会话使用。",
+    "invisible": true
+  },
+  "cooldown_seconds": {
+    "description": "搜图与通用｜单用户冷却（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "控制找本、搜图和搜本的冷却；找鸡使用独立冷却。设为 0 可关闭。",
+    "invisible": true
+  },
+  "max_pending_tasks": {
+    "description": "搜图与通用｜最大待处理任务数",
+    "type": "int",
+    "default": null,
+    "hint": "超过上限的新请求会立即失败，不会无限排队。",
+    "invisible": true
+  },
+  "strict_mode": {
+    "description": "搜图与通用｜指令默认使用严格模式",
+    "type": "bool",
+    "default": null,
+    "hint": "关闭时 factor=1.2，开启时 factor=1.4。",
+    "invisible": true
+  },
+  "timeout_seconds": {
+    "description": "搜图与通用｜搜图服务网络超时（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "底层搜图服务的连接/读取超时，范围 10-600 秒；整轮结果返回时限由“搜图结果返回超时”控制。",
+    "invisible": true
+  },
+  "search_result_timeout_seconds": {
+    "description": "搜图与通用｜搜图结果返回超时（秒）",
+    "type": "int",
+    "default": null,
+    "min": 5,
+    "max": 600,
+    "hint": "从开始搜图到原始结果消息发送完成的总时限；超时会中断本次操作并提示，不再继续 JM 查询。",
+    "invisible": true
+  },
+  "max_concurrency": {
+    "description": "搜图与通用｜最大并发搜索数",
+    "type": "int",
+    "default": null,
+    "hint": "建议保持 1-2，避免触发网站限流。",
+    "invisible": true
+  },
+  "top_k": {
+    "description": "搜图与通用｜网站检索候选数",
+    "type": "int",
+    "default": null,
+    "hint": "允许范围 1-50。",
+    "invisible": true
+  },
+  "max_results": {
+    "description": "搜图与通用｜最多展示条数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 10,
+    "hint": "允许范围 1-10；超过数量时优先展示相似度更高的结果。",
+    "invisible": true
+  },
+  "min_similarity": {
+    "description": "搜图与通用｜最低相似度（%）",
+    "type": "float",
+    "default": null,
+    "min": 0,
+    "max": 100,
+    "hint": "允许范围 0-100；只展示相似度达到此数值的结果。",
+    "invisible": true
+  },
+  "show_match_page_url": {
+    "description": "搜图与通用｜显示匹配页地址",
+    "type": "bool",
+    "default": null,
+    "hint": "关闭后不在单条结果中显示“匹配页”地址。",
+    "invisible": true
+  },
+  "show_detail_page_url": {
+    "description": "搜图与通用｜显示详情页地址",
+    "type": "bool",
+    "default": null,
+    "hint": "关闭后不在单条结果中显示“详情页”地址。",
+    "invisible": true
+  },
+  "show_preview_image": {
+    "description": "搜图与通用｜显示预览图片",
+    "type": "bool",
+    "default": null,
+    "hint": "结果含有预览图时一并发送；关闭后仅发送文字。",
+    "invisible": true
+  },
+  "multi_search_enabled": {
+    "description": "多引擎｜启用多引擎搜图",
+    "type": "bool",
+    "default": null,
+    "hint": "/搜图 直接并行查询已开启的来源，仅展示结果；/找本 仅在 soutubot 未达标或请求失败时使用多引擎兜底。关闭后 /搜图 不可用，/找本 仍可查询 soutubot。",
+    "invisible": true
+  },
+  "saucenao_enabled": {
+    "description": "多引擎｜启用 SauceNAO",
+    "type": "bool",
+    "default": null,
+    "hint": "多引擎总开关开启时生效；未配置 API Key 会跳过。",
+    "invisible": true
+  },
+  "saucenao_api_key": {
+    "description": "多引擎｜SauceNAO API Key",
+    "type": "string",
+    "default": null,
+    "hint": "仅用于 SauceNAO 检索，不会发送到聊天或日志。",
+    "invisible": true
+  },
+  "saucenao_min_similarity": {
+    "description": "多引擎｜SauceNAO 最低相似度",
+    "type": "int",
+    "default": null,
+    "hint": "仅过滤 SauceNAO 结果，与 soutubot 达标阈值独立。",
+    "invisible": true
+  },
+  "yandex_enabled": {
+    "description": "多引擎｜启用 Yandex",
+    "type": "bool",
+    "default": null,
+    "hint": "用于一般图片溯源；相关/相似页面不能视为已确认作品。",
+    "invisible": true
+  },
+  "ascii2d_enabled": {
+    "description": "多引擎｜启用 ascii2d",
+    "type": "bool",
+    "default": null,
+    "hint": "依赖网站可访问性；默认关闭，可单独开启。",
+    "invisible": true
+  },
+  "ascii2d_bovw": {
+    "description": "多引擎｜ascii2d 特征搜索",
+    "type": "bool",
+    "default": null,
+    "hint": "启用后额外查询特征检索页。",
+    "invisible": true
+  },
+  "multi_search_timeout_seconds": {
+    "description": "多引擎｜每个搜索源总超时（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "范围 5–120；一个来源失败不会丢失其他来源结果。",
+    "invisible": true
+  },
+  "multi_search_cache_ttl": {
+    "description": "多引擎｜多引擎缓存时长（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "0 关闭缓存；最多缓存 128 个来源/图片结果。",
+    "invisible": true
+  },
+  "findchicken_enabled": {
+    "description": "找鸡｜启用找鸡",
+    "type": "bool",
+    "default": null,
+    "hint": "先回复“收到，开始找鸡”，并行搜索后识别作者、账号和出处；沿用白名单，不受多引擎、通用 LLM 工具、JM/NH 开关控制。",
+    "invisible": true
+  },
+  "findchicken_api_key": {
+    "description": "找鸡｜SauceNAO API Key",
+    "type": "string",
+    "default": null,
+    "secret": true,
+    "hint": "仅用于找鸡，与多引擎搜图的 API Key 分开保存；在 SauceNAO 账号的 Search API 页面获取。",
+    "invisible": true
+  },
+  "findchicken_proxy": {
+    "description": "找鸡｜HTTP/HTTPS 代理",
+    "type": "string",
+    "default": null,
+    "hint": "仅用于找鸡，例如 http://127.0.0.1:7890；留空直连，不继承搜图或 JM 的代理配置。",
+    "invisible": true
+  },
+  "findchicken_timeout_seconds": {
+    "description": "找鸡｜查询超时（秒）",
+    "type": "int",
+    "default": null,
+    "min": 5,
+    "max": 120,
+    "hint": "分别限制排队及图片准备阶段、SauceNAO 查询阶段；Google 使用独立总超时，一个来源超时不丢失另一来源结果。",
+    "invisible": true
+  },
+  "findchicken_candidate_limit": {
+    "description": "找鸡｜每个来源的候选数量",
+    "type": "int",
+    "default": null,
+    "hint": "1～60。每个来源供 LLM 筛选的候选上限；Google 每模式最多收集 60 条，SauceNAO 单次最多请求 30 条。最终只展示一条，不改变搜图展示数量。",
+    "min": 1,
+    "max": 60,
+    "invisible": true
+  },
+  "findchicken_similarity_threshold": {
+    "description": "找鸡｜最低相似度（%）",
+    "type": "float",
+    "default": null,
+    "min": 0,
+    "max": 100,
+    "hint": "只过滤找鸡 SauceNAO 的结果，与搜图设置独立；Google 没有百分比相似度，不使用此阈值。",
+    "invisible": true
+  },
+  "findchicken_show_similarity": {
+    "description": "找鸡｜显示相似度",
+    "type": "bool",
+    "default": null,
+    "hint": "开启后在“视觉匹配”后显示接口提供的真实分数；Google 没有百分比分数，不补造。",
+    "invisible": true
+  },
+  "findchicken_cooldown_seconds": {
+    "description": "找鸡｜单用户冷却（秒）",
+    "type": "int",
+    "default": null,
+    "min": 0,
+    "max": 600,
+    "hint": "独立于找本、搜图、搜本的冷却记录，0 表示不限制。",
+    "invisible": true
+  },
+  "findchicken_llm_enabled": {
+    "description": "找鸡｜启用 LLM 作者识别与来源判断",
+    "type": "bool",
+    "default": null,
+    "hint": "仅影响找鸡。让 LLM 从所有候选中优先查找原作者并整理名字；没有选中或模型失败时按真实相似度优先、Google 排名其次返回一条匹配来源，不编造缺失信息。不发送原图。关闭后直接展示最高匹配来源。",
+    "invisible": true
+  },
+  "findchicken_llm_provider": {
+    "description": "找鸡｜作者识别模型",
+    "type": "string",
+    "default": null,
+    "_special": "select_provider",
+    "hint": "从 Bot 已配置的聊天模型中选择；留空跟随当前会话模型。只需文本能力，用搜索元数据和公开发布页信息整理原作者身份，不重复判断原图。",
+    "invisible": true
+  },
+  "findchicken_llm_timeout_seconds": {
+    "description": "找鸡｜LLM 判断超时（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "10～180 秒，独立于搜索超时；每次找鸡最多调用模型一次，不调用工具、不带聊天记录。",
+    "invisible": true
+  },
+  "google_lens_search_enabled": {
+    "description": "Google Lens｜参与搜图与找本兜底",
+    "type": "bool",
+    "default": null,
+    "hint": "与已开启的多引擎并行；遵循多引擎总开关。不会改变找本的 soutubot 优先流程。",
+    "invisible": true
+  },
+  "google_lens_findchicken_enabled": {
+    "description": "Google Lens｜参与找鸡",
+    "type": "bool",
+    "default": null,
+    "hint": "找鸡同时查询 SauceNAO 与 Google Lens，不是失败后兜底；不受多引擎总开关影响。",
+    "invisible": true
+  },
+  "google_lens_api_key": {
+    "description": "Google Lens｜SerpAPI API Key",
+    "type": "string",
+    "default": null,
+    "secret": true,
+    "hint": "在 https://serpapi.com/manage-api-key 获取；两个入口共用此 Key。未填写时跳过 Google，不影响其他来源。",
+    "invisible": true
+  },
+  "google_lens_proxy": {
+    "description": "Google Lens｜HTTP/HTTPS 代理",
+    "type": "string",
+    "default": null,
+    "hint": "仅用于 SerpAPI；留空直连，不继承其他搜索源的代理。",
+    "invisible": true
+  },
+  "google_lens_timeout_seconds": {
+    "description": "Google Lens｜总超时（秒）",
+    "type": "int",
+    "default": null,
+    "min": 5,
+    "max": 120,
+    "hint": "包含排队、压缩、上传和查询；超时保留其他来源结果。",
+    "invisible": true
+  },
+  "google_lens_search_type": {
+    "description": "Google Lens｜查询类型",
+    "type": "string",
+    "default": null,
+    "options": [
+      "visual_matches",
+      "exact_matches",
+      "all"
+    ],
+    "hint": "默认全部，与 Google 网页“全部”入口对应，合并同图、视觉和网页候选；exact_matches 仅同图。Google 不提供百分比相似度。",
+    "invisible": true
+  },
+  "google_lens_retry_empty": {
+    "description": "Google Lens｜空结果补查",
+    "type": "bool",
+    "default": null,
+    "hint": "全部/外观匹配返回空候选时切换另一模式补查一次，最多两次计费搜索，共用原总超时和已上传图片；同图模式不扩展。可关闭以节省额度。",
+    "invisible": true
+  },
+  "google_lens_expand_sources": {
+    "description": "Google Lens｜缺少 X 候选时补查",
+    "type": "bool",
+    "default": null,
+    "hint": "已有结果但没有可解析账号的 X 发布链接时，补查另一模式并合并候选；LLM 优先检查 X，无合适 X 再看其他平台。未知站点仍保留。与空结果补查合计最多两次搜索、共用总超时；可关闭以节省额度。",
+    "invisible": true
+  },
+  "google_lens_max_results": {
+    "description": "Google Lens｜最多展示结果数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 10,
+    "hint": "1～10，仅控制搜图及找本兜底展示；Google 候选缓存保留每模式最多 60 条，找鸡使用独立候选上限。",
+    "invisible": true
+  },
+  "google_lens_cache_ttl": {
+    "description": "Google Lens｜结果缓存（秒）",
+    "type": "int",
+    "default": null,
+    "min": 0,
+    "max": 86400,
+    "hint": "0 关闭；最多 128 项。非空结果按设置缓存，空结果最多缓存 30 秒，到期绕过上游旧缓存；请求失败不缓存。同图跨入口共享查询。",
+    "invisible": true
+  },
+  "jm_enabled": {
+    "description": "JM｜总开关（查询与下载）",
+    "type": "bool",
+    "default": null,
+    "hint": "统一控制搜图后的 JM 查询与下载、/搜本、/jm 和 JM 工具。关闭后全部 JM 查询、下载停止；NH 和搜图不受影响。",
+    "invisible": true
+  },
+  "jm_title_search_enabled": {
+    "description": "JM｜启用 JM 标题检索",
+    "type": "bool",
+    "default": null,
+    "hint": "关闭后跳过标题检索，直接尝试作者作品匹配。",
+    "invisible": true
+  },
+  "jm_author_search_enabled": {
+    "description": "JM｜启用 JM 作者作品匹配",
+    "type": "bool",
+    "default": null,
+    "hint": "仅在标题未确认作品时，按模型提取的作者/社团查询作品并核验。",
+    "invisible": true
+  },
+  "jm_retry_times": {
+    "description": "JM｜JM 查询重试次数",
+    "type": "int",
+    "default": null,
+    "min": 0,
+    "max": 1,
+    "hint": "默认不重试，避免放大等待时间。",
+    "invisible": true
+  },
+  "jm_max_concurrency": {
+    "description": "JM｜JM 查询并发数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 5,
+    "hint": "标题和作者查询共享此并发上限。",
+    "invisible": true
+  },
+  "jm_domain_list": {
+    "description": "JM｜JM API 域名优先列表",
+    "type": "list",
+    "default": null,
+    "hint": "通常留空以使用 jmcomic 当前域名发现机制。",
+    "invisible": true
+  },
+  "jm_proxy": {
+    "description": "JM｜JM 代理设置",
+    "type": "string",
+    "default": null,
+    "hint": "网络排障项；system 使用系统代理，空值不额外指定。不要填写凭据。",
+    "invisible": true
+  },
+  "jm_auto_select_threshold": {
+    "description": "JM｜JM 自动确认阈值",
+    "type": "float",
+    "default": null,
+    "min": 80,
+    "max": 100,
+    "hint": "达到阈值且领先候选足够多时才直接显示 JM 号。",
+    "invisible": true
+  },
+  "jm_min_candidate_threshold": {
+    "description": "JM｜JM 候选最低阈值",
+    "type": "float",
+    "default": null,
+    "min": 0,
+    "max": 90,
+    "hint": "低于此分数不显示候选。",
+    "invisible": true
+  },
+  "jm_auto_select_margin": {
+    "description": "JM｜JM 自动确认领先分差",
+    "type": "float",
+    "default": null,
+    "min": 0,
+    "max": 30,
+    "hint": "第一名与第二名的最小分差，避免相近标题被误报。",
+    "invisible": true
+  },
+  "jm_author_max_pages": {
+    "description": "JM｜每位作者最大查询页数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 5,
+    "hint": "作者作品过多时的网络与响应时间上限。",
+    "invisible": true
+  },
+  "jm_author_max_candidates": {
+    "description": "JM｜作者兜底候选上限",
+    "type": "int",
+    "default": null,
+    "min": 10,
+    "max": 100,
+    "hint": "只将此前若干 JM 官方标题交给模型核验，避免超大响应。",
+    "invisible": true
+  },
+  "jm_download_timeout_seconds": {
+    "description": "JM｜JM 下载超时（秒）",
+    "type": "int",
+    "default": null,
+    "min": 60,
+    "max": 3600,
+    "hint": "单本从开始下载到 PDF 生成完成的最长时间。",
+    "invisible": true
+  },
+  "jm_download_max_concurrency": {
+    "description": "JM｜同时下载的 JM 作品数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 4,
+    "hint": "限制同时下载的不同作品数量；每本作品内部还会并发下载图片。",
+    "invisible": true
+  },
+  "jm_download_image_concurrency": {
+    "description": "JM｜单本图片下载并发数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 30,
+    "hint": "控制同一本作品同时请求的图片数量；数值越大可能越快，也会增加网络压力。",
+    "invisible": true
+  },
+  "jm_download_photo_concurrency": {
+    "description": "JM｜单本章节下载并发数",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 8,
+    "hint": "控制同一本作品同时处理的章节数量，建议保持默认值。",
+    "invisible": true
+  },
+  "jm_manage_users": {
+    "description": "JM｜JM 缓存管理员用户 ID",
+    "type": "list",
+    "default": null,
+    "hint": "填写允许执行 /jm清理 的用户 ID。留空时关闭手动缓存清理命令；仍须通过插件白名单。",
+    "invisible": true
+  },
+  "nh_download_enabled": {
+    "description": "NH｜启用 NH 下载",
+    "type": "bool",
+    "default": null,
+    "hint": "默认开启；soutubot 达标目标包含 NH 编号/链接时优先下载 NH，也允许明确编号指令与 NH 工具调用。已有配置若为关闭则保留原值。",
+    "invisible": true
+  },
+  "nh_download_timeout_seconds": {
+    "description": "NH｜NH 下载及 PDF 总超时（秒）",
+    "type": "int",
+    "default": null,
+    "hint": "范围 60–3600；包含排队、下载和 PDF 生成。",
+    "invisible": true
+  },
+  "nh_download_max_concurrency": {
+    "description": "NH｜NH 最大同时处理作品数",
+    "type": "int",
+    "default": null,
+    "hint": "范围 1–4，与 JM 并发独立。",
+    "invisible": true
+  },
+  "nh_image_concurrency": {
+    "description": "NH｜NH 图片并发数",
+    "type": "int",
+    "default": null,
+    "hint": "范围 1–10；每部作品最多 2000 页、原始图片总大小最多 1 GiB。",
+    "invisible": true
+  },
+  "jm_pdf_password_enabled": {
+    "description": "PDF · JM｜是否启用 PDF 密码",
+    "type": "bool",
+    "default": null,
+    "hint": "默认开启；关闭时 PDF 无密码。开启时使用固定密码，固定密码留空则使用纯数字 JM 号。",
+    "invisible": true
+  },
+  "jm_pdf_fixed_password": {
+    "description": "PDF · JM｜PDF 固定密码",
+    "type": "string",
+    "default": null,
+    "hint": "仅在启用 PDF 密码时生效；留空使用纯数字 JM 号。实际密码会随上传提示发送到当前会话。",
+    "invisible": true
+  },
+  "jm_pdf_cache_enabled": {
+    "description": "PDF · JM｜保留并复用 PDF 缓存",
+    "type": "bool",
+    "default": null,
+    "hint": "开启后相同 JM 号可直接发送本地 PDF，避免重复访问和下载。",
+    "invisible": true
+  },
+  "jm_pdf_cache_ttl_hours": {
+    "description": "PDF · JM｜PDF 缓存有效期（小时）",
+    "type": "int",
+    "default": null,
+    "min": 0,
+    "max": 8760,
+    "hint": "默认保留 7 天；设为 0 表示不过期。过期文件会在再次请求该作品时重建。",
+    "invisible": true
+  },
+  "jm_max_pdf_size_mb": {
+    "description": "PDF · JM｜PDF 直接发送大小上限（MB）",
+    "type": "int",
+    "default": null,
+    "min": 1,
+    "max": 500,
+    "hint": "超过此大小时不尝试发送，PDF 仍保留在本地缓存；平台自身也可能有更低限制。",
+    "invisible": true
+  },
+  "jm_cleanup_images_after_pdf": {
+    "description": "PDF · JM｜PDF 成功后清理图片缓存",
+    "type": "bool",
+    "default": null,
+    "hint": "仅在 PDF 已生成并验证有效后删除该作品的原始图片；失败时保留图片以便重试。",
+    "invisible": true
+  },
+  "jm_cleanup_pdf_after_send": {
+    "description": "PDF · JM｜发送成功后删除 PDF",
+    "type": "bool",
+    "default": null,
+    "hint": "开启后仅在机器人确认发送成功后删除 PDF；默认保留以便后续复用。",
+    "invisible": true
+  },
+  "nh_pdf_password_enabled": {
+    "description": "PDF · NH｜NH PDF 密码",
+    "type": "bool",
+    "default": null,
+    "hint": "开启时使用固定密码；固定密码留空则使用纯数字 NH 编号。",
+    "invisible": true
+  },
+  "nh_pdf_fixed_password": {
+    "description": "PDF · NH｜NH PDF 固定密码",
+    "type": "string",
+    "default": null,
+    "hint": "留空使用 NH 编号；实际密码会随发送提示显示。",
+    "invisible": true
+  },
+  "nh_pdf_cache_enabled": {
+    "description": "PDF · NH｜NH PDF 缓存",
+    "type": "bool",
+    "default": null,
+    "hint": "缓存保留 7 天，按密码区分；失败时保留完整图片以便重试 PDF。",
+    "invisible": true
+  },
+  "nh_max_pdf_size_mb": {
+    "description": "PDF · NH｜NH PDF 发送大小上限（MB）",
+    "type": "int",
+    "default": null,
+    "hint": "范围 1–500；超出后保留文件。",
+    "invisible": true
+  },
+  "trigger_nickname": {
+    "description": "触发昵称",
+    "type": "string",
+    "default": null,
+    "invisible": true
+  },
+  "_config_sections_migrated": {
+    "type": "bool",
+    "default": false,
+    "invisible": true,
+    "description": "Configuration migration marker"
+  },
+  "download_confirmation_timeout_seconds": {
+    "description": "下载确认有效期（秒）",
+    "type": "int",
+    "default": null,
+    "min": 30,
+    "max": 3600,
+    "hint": "找本和搜本匹配成功后，原查询者须在当前会话此时限内回复“下载”。从询问发送完成后计时；与下载任务超时独立。范围 30–3600 秒。",
+    "invisible": true
+  }
+}
