@@ -1,4 +1,4 @@
-# 搜图Bot酱找本
+# 综合搜图功能
 
 AstrBot 的搜图、作品查询和 PDF 下载插件。支持 soutubot 搜图、JM 查询与下载、NH 下载，以及 SauceNAO / Yandex / ascii2d / Google Lens 多引擎检索。
 

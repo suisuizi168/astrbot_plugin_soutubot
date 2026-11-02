@@ -1,5 +1,5 @@
 name: astrbot_plugin_soutubot
-display_name: 搜图Bot酱找本
+display_name: 综合搜图功能
 short_desc: Google Lens 多引擎搜图、找鸡作者查询与 JM/NH PDF 下载
 desc: 找本、搜图、找鸡独立入口；Google Lens 并行搜索与多平台 LLM 原作者识别，支持 JM/NH 下载和 PDF 发送。
 version: 4.6.1
